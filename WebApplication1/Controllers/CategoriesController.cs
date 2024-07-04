@@ -5,6 +5,7 @@ using CatalogApi.Filters;
 using CatalogApi.Models;
 using CatalogApi.Pagination;
 using CatalogApi.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +28,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize]
     public async Task<ActionResult<IEnumerable<CategoryDTO>>> GetAsync()
     {
         var categories = await _uof.CategoryRepository.GetAllAsync();
