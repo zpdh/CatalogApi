@@ -1,20 +1,20 @@
-
+using System.Text;
+using System.Text.Json.Serialization;
 using CatalogApi.Data;
 using CatalogApi.DataTransferObjects;
 using CatalogApi.Extensions;
 using CatalogApi.Filters;
 using CatalogApi.Logging;
+using CatalogApi.Models;
 using CatalogApi.Repositories;
+using CatalogApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json.Serialization;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using CatalogApi.Models;
-using CatalogApi.Services;
+using Microsoft.OpenApi.Models;
 
-namespace WebApplication1;
+namespace CatalogApi;
 
 public class Program
 {
@@ -29,13 +29,36 @@ public class Program
         .AddNewtonsoftJson();
 
         builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen();
+        builder.Services.AddSwaggerGen(setup =>
+        {
+            setup.SwaggerDoc("v1", new OpenApiInfo { Title = "CatalogApi", Version = "v1" });
 
-        builder.Services.AddAuthorization();
-        builder.Services.AddAuthentication("Bearer").AddJwtBearer();
+            setup.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme()
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.ApiKey,
+                Scheme = "Bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Bearer JWT "
+            });
+            setup.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    }, new string[] {}
+                }
+            });
+        });
 
         builder.Services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<DataContext>()
-               .AddDefaultTokenProviders();
+       .AddDefaultTokenProviders();
 
         string? mySqlConnection =
         builder.Configuration.GetConnectionString("DefaultConnection");
@@ -44,7 +67,7 @@ public class Program
         options.UseMySql(mySqlConnection,
         ServerVersion.AutoDetect(mySqlConnection)));
 
-        //JWT Bearer authentication stuff
+        //JWT Bearer authentication & authorization
         var secretKey = builder.Configuration["JWT:SecretKey"] ?? throw new ArgumentException("Invalid secret key");
         builder.Services.AddAuthentication(options =>
         {
@@ -66,7 +89,7 @@ public class Program
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
             };
         });
-
+        builder.Services.AddAuthorization();
 
         builder.Logging.AddProvider(new CustomerLoggerProvider(new CustomerLoggerProviderConfiguration()
         {
@@ -79,7 +102,6 @@ public class Program
         builder.Services.AddScoped(typeof(ICrudRepository<>), typeof(CrudRepository<>));
         builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
         builder.Services.AddScoped<ITokenService, TokenService>();
-
         builder.Services.AddAutoMapper(typeof(ProductDTOMappingProfile));
 
         var app = builder.Build();
