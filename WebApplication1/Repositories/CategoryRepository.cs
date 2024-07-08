@@ -29,7 +29,7 @@ public class CategoryRepository : CrudRepository<Category>, ICategoryRepository
 
         if (!string.IsNullOrEmpty(filter.Name))
         {
-            categories = categories.Where(obj => obj.Name.Contains(filter.Name, StringComparison.OrdinalIgnoreCase));
+            categories = categories.Where(obj => obj.Name!.Contains(filter.Name, StringComparison.OrdinalIgnoreCase));
         }
 
         return await categories.ToPagedListAsync(filter.PageNumber, filter.PageSize);

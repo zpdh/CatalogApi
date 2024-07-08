@@ -1,22 +1,25 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using CatalogApi.Data;
 using CatalogApi.DataTransferObjects;
 using CatalogApi.Extensions;
 using CatalogApi.Filters;
 using CatalogApi.Logging;
 using CatalogApi.Models;
+using CatalogApi.RateLimitOptions;
 using CatalogApi.Repositories;
 using CatalogApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 namespace CatalogApi;
 
-public class Program
+public static class Program
 {
     public static void Main(string[] args)
     {
@@ -25,8 +28,14 @@ public class Program
         // Add services to the container.
 
         builder.Services.AddControllers(options => options.Filters.Add(typeof(ApiExceptionFilter)))
-        .AddJsonOptions(options => options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles)
-        .AddNewtonsoftJson();
+            .AddJsonOptions(options => options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles)
+            .AddNewtonsoftJson();
+
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("CorsPolicyOne",
+                policy => { policy.WithOrigins("https://localhost:7185").WithMethods("GET").AllowAnyHeader(); });
+        });
 
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(setup =>
@@ -52,20 +61,21 @@ public class Program
                             Type = ReferenceType.SecurityScheme,
                             Id = "Bearer"
                         }
-                    }, new string[] {}
+                    },
+                    new string[] { }
                 }
             });
         });
 
         builder.Services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<DataContext>()
-       .AddDefaultTokenProviders();
+            .AddDefaultTokenProviders();
 
         string? mySqlConnection =
-        builder.Configuration.GetConnectionString("DefaultConnection");
+            builder.Configuration.GetConnectionString("DefaultConnection");
 
         builder.Services.AddDbContext<DataContext>(options =>
-        options.UseMySql(mySqlConnection,
-        ServerVersion.AutoDetect(mySqlConnection)));
+            options.UseMySql(mySqlConnection,
+                ServerVersion.AutoDetect(mySqlConnection)));
 
         //JWT Bearer authentication & authorization
         var secretKey = builder.Configuration["JWT:SecretKey"] ?? throw new ArgumentException("Invalid secret key");
@@ -89,12 +99,38 @@ public class Program
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
             };
         });
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+            options.AddPolicy("SuperAdminOnly", policy => policy.RequireRole("SuperAdmin")
+                .RequireClaim("id", "bobbrown"));
+            options.AddPolicy("ExclusivePolicy", policy => policy.RequireAssertion(handler =>
+                handler.User.HasClaim(claim => claim is { Type: "id", Value: "bobbrown" } ||
+                                               handler.User.IsInRole("SuperAdmin"))));
+        });
 
         builder.Logging.AddProvider(new CustomerLoggerProvider(new CustomerLoggerProviderConfiguration()
         {
             LogLevel = LogLevel.Information
         }));
+
+        var rateLimitOptions = new MyRateLimitOptions();
+        builder.Configuration.GetSection("RateLimitValues").Bind(rateLimitOptions);
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpcontext =>
+                RateLimitPartition.GetFixedWindowLimiter(httpcontext.User.Identity?.Name ??
+                                                         httpcontext.Request.Headers.Host.ToString(),
+                    partition => new FixedWindowRateLimiterOptions
+                    {
+                        AutoReplenishment = rateLimitOptions.AutoReplenishment,
+                        PermitLimit = rateLimitOptions.PermitLimit,
+                        QueueLimit = rateLimitOptions.QueueLimit,
+                        Window = TimeSpan.FromSeconds(rateLimitOptions.Window)
+                    }));
+        });
 
         builder.Services.AddScoped<ApiLoggingFilter>();
         builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
@@ -114,8 +150,16 @@ public class Program
             app.ConfigureExceptionHandler();
         }
 
-        app.UseHttpsRedirection();
 
+        app.UseHttpsRedirection();
+        app.UseStaticFiles();
+        app.UseRouting();
+
+        app.UseRateLimiter();
+
+        app.UseCors();
+
+        app.UseAuthorization();
         app.MapControllers();
 
         app.Run();

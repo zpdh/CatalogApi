@@ -1,13 +1,11 @@
 ﻿using AutoMapper;
-using CatalogApi.Data;
 using CatalogApi.DataTransferObjects;
 using CatalogApi.Models;
 using CatalogApi.Pagination;
 using CatalogApi.Repositories;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using X.PagedList;
 
@@ -29,6 +27,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<ProductDTO>>> GetAsync()
     {
         var products = await _uof.ProductRepository.GetAllAsync();
@@ -46,6 +45,7 @@ public class ProductsController : ControllerBase
 
     [HttpGet]
     [Route("{id:int:min(1)}")]
+    [AllowAnonymous]
     public async Task<ActionResult<ProductDTO>> GetByIdAsync(int id)
     {
         var product = await _uof.ProductRepository.GetByIdAsync(x => x.ProductId == id);
@@ -63,6 +63,7 @@ public class ProductsController : ControllerBase
 
     [HttpGet]
     [Route("/category/{categoryId}")]
+    [AllowAnonymous]
     public async Task<ActionResult<ProductDTO>> GetProductsByCategoryAsync(int categoryId)
     {
         var products = await _uof.ProductRepository.GetProductsByCategoryAsync(categoryId);
@@ -81,6 +82,7 @@ public class ProductsController : ControllerBase
 
     [HttpGet]
     [Route("pagination")]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<ProductDTO>>> GetAsync([FromQuery] ProductsParameters parameters)
     {
         var products = await _uof.ProductRepository.GetProductsAsync(parameters);
@@ -96,6 +98,7 @@ public class ProductsController : ControllerBase
 
     [HttpGet]
     [Route("pagination/filter")]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<ProductDTO>>> GetFilteredAsync([FromQuery] ProductsPriceFilter filter)
     {
         var products = await _uof.ProductRepository.GetProductsFilteredByPriceAsync(filter);
@@ -129,6 +132,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ProductDTO>> PostAsync(ProductDTO productDto)
     {
         if (productDto == null)
@@ -147,21 +151,22 @@ public class ProductsController : ControllerBase
 
     [HttpPatch]
     [Route("{id}")]
-    public async Task<ActionResult<ProductUpdateResponseDTO>> PatchAsync(int id, JsonPatchDocument<ProductUpdateRequestDTO> patchProductDTO)
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<ProductUpdateResponseDTO>> PatchAsync(int id, JsonPatchDocument<ProductUpdateRequestDTO> patchProductDto)
     {
-        if (patchProductDTO == null || id <= 0) return BadRequest();
+        if (patchProductDto == null || id <= 0) return BadRequest();
 
         var product = await _uof.ProductRepository.GetByIdAsync(x => x.ProductId == id);
 
         var productUpdateRequest = _mapper.Map<ProductUpdateRequestDTO>(product);
 
-        patchProductDTO.ApplyTo(productUpdateRequest, ModelState);
+        patchProductDto.ApplyTo(productUpdateRequest, ModelState);
 
         if (!ModelState.IsValid || TryValidateModel(productUpdateRequest)) return BadRequest(ModelState);
 
         _mapper.Map(productUpdateRequest, product);
 
-        _uof.ProductRepository.Update(product);
+        _uof.ProductRepository.Update(product!);
         await _uof.CommitAsync();
 
         return Ok(_mapper.Map<ProductUpdateResponseDTO>(product));
@@ -169,6 +174,7 @@ public class ProductsController : ControllerBase
 
     [HttpPut]
     [Route("{id:int:min(1)}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ProductDTO>> PutAsync(int id, ProductDTO productDto)
     {
         if (productDto.ProductId != id)
@@ -187,6 +193,7 @@ public class ProductsController : ControllerBase
 
     [HttpDelete]
     [Route("{id:int:min(1)}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ProductDTO>> DeleteAsync(int id)
     {
         var product = await _uof.ProductRepository.GetByIdAsync(x => x.ProductId == id);
