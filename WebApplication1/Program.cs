@@ -1,6 +1,8 @@
+using System.Reflection;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Asp.Versioning;
 using CatalogApi.Data;
 using CatalogApi.DataTransferObjects;
 using CatalogApi.Extensions;
@@ -12,16 +14,15 @@ using CatalogApi.Repositories;
 using CatalogApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 namespace CatalogApi;
 
-public static class Program
+ internal static class Program
 {
-    public static void Main(string[] args)
+     internal static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -38,11 +39,28 @@ public static class Program
         });
 
         builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen(setup =>
+        builder.Services.AddSwaggerGen(options =>
         {
-            setup.SwaggerDoc("v1", new OpenApiInfo { Title = "CatalogApi", Version = "v1" });
+            options.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Version = "v1",
+                Title = "CatalogApi",
+                Description = "Products and categories catalog",
+                TermsOfService = new Uri("https://example.com/terms"),
+                Contact = new OpenApiContact
+                {
+                    Name = "Bob Brown",
+                    Email = "bobbrown@gmail.com",
+                    Url = new Uri("https://github.com/zpdh")
+                },
+                License = new OpenApiLicense
+                {
+                    Name = "MIT License",
+                    Url = new Uri("https://opensource.org/licenses/MIT")
+                }
+            });
 
-            setup.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme()
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme()
             {
                 Name = "Authorization",
                 Type = SecuritySchemeType.ApiKey,
@@ -51,7 +69,7 @@ public static class Program
                 In = ParameterLocation.Header,
                 Description = "Bearer JWT "
             });
-            setup.AddSecurityRequirement(new OpenApiSecurityRequirement
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
             {
                 {
                     new OpenApiSecurityScheme
@@ -65,6 +83,8 @@ public static class Program
                     new string[] { }
                 }
             });
+            var xmlFileName = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFileName));
         });
 
         builder.Services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<DataContext>()
@@ -119,17 +139,29 @@ public static class Program
         builder.Services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            
+
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpcontext =>
                 RateLimitPartition.GetFixedWindowLimiter(httpcontext.User.Identity?.Name ??
                                                          httpcontext.Request.Headers.Host.ToString(),
-                    partition => new FixedWindowRateLimiterOptions
+                    _ => new FixedWindowRateLimiterOptions
                     {
                         AutoReplenishment = rateLimitOptions.AutoReplenishment,
                         PermitLimit = rateLimitOptions.PermitLimit,
                         QueueLimit = rateLimitOptions.QueueLimit,
                         Window = TimeSpan.FromSeconds(rateLimitOptions.Window)
                     }));
+        });
+
+        builder.Services.AddApiVersioning(options =>
+        {
+            options.DefaultApiVersion = new ApiVersion(1, 0);
+            options.AssumeDefaultVersionWhenUnspecified = true;
+            options.ReportApiVersions = true;
+            options.ApiVersionReader = ApiVersionReader.Combine(new UrlSegmentApiVersionReader());
+        }).AddApiExplorer(options =>
+        {
+            options.GroupNameFormat = "'v'VVV";
+            options.SubstituteApiVersionInUrl = true;
         });
 
         builder.Services.AddScoped<ApiLoggingFilter>();

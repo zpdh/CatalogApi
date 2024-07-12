@@ -1,4 +1,5 @@
-﻿using AutoMapper;
+﻿using Asp.Versioning;
+using AutoMapper;
 using CatalogApi.DataTransferObjects;
 using CatalogApi.Models;
 using CatalogApi.Pagination;
@@ -12,7 +13,9 @@ using X.PagedList;
 namespace CatalogApi.Controllers;
 
 [ApiController]
-[Route("v1/api/[controller]")]
+[Produces("application/json")]
+[ApiConventionType(typeof(DefaultApiConventions))]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class ProductsController : ControllerBase
 {
     private readonly IUnitOfWork _uof;
@@ -25,7 +28,7 @@ public class ProductsController : ControllerBase
         _logger = logger;
         _mapper=mapper;
     }
-
+    
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<ProductDTO>>> GetAsync()
@@ -48,6 +51,8 @@ public class ProductsController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ProductDTO>> GetByIdAsync(int id)
     {
+        if (id <= 0) return BadRequest("Invalid id");
+        
         var product = await _uof.ProductRepository.GetByIdAsync(x => x.ProductId == id);
 
         if (product == null)
@@ -146,7 +151,7 @@ public class ProductsController : ControllerBase
         _uof.ProductRepository.Create(product);
         await _uof.CommitAsync();
 
-        return Ok(productDto);
+        return Created("Products", productDto);
     }
 
     [HttpPatch]

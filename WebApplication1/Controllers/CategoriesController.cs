@@ -1,22 +1,18 @@
-﻿using CatalogApi.Data;
-using CatalogApi.DataTransferObjects;
+﻿using CatalogApi.DataTransferObjects;
 using CatalogApi.Extensions;
-using CatalogApi.Filters;
 using CatalogApi.Models;
 using CatalogApi.Pagination;
 using CatalogApi.Repositories;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Cors;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using X.PagedList;
 
 namespace CatalogApi.Controllers;
 
-[Route("v1/api/[controller]")]
+[Route("api/v{version:apiVersion}/[controller]")]
+[ApiConventionType(typeof(DefaultApiConventions))]
+[Produces("application/json")]
 [ApiController]
 public class CategoriesController : ControllerBase
 {
@@ -29,6 +25,10 @@ public class CategoriesController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets list of category objects from database
+    /// </summary>
+    /// <returns>Returns list of categories</returns>
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<CategoryDTO>>> GetAsync()
@@ -44,6 +44,11 @@ public class CategoriesController : ControllerBase
         return Ok(categories.ToDTOList());
     }
 
+    /// <summary>
+    /// Gets a single category object from database
+    /// </summary>
+    /// <param name="id"></param>
+    /// <returns>Returns single category</returns>
     [HttpGet]
     [Route("{id:int:min(1)}")]
     [AllowAnonymous]
@@ -60,10 +65,14 @@ public class CategoriesController : ControllerBase
         return Ok(category.ToDTO());
     }
 
+    /// <summary>
+    /// Gets list of category objects from database while paginating according to the informed config
+    /// </summary>
+    /// <returns>Returns list of categories</returns>
     [HttpGet]
     [Route("pagination")]
     [AllowAnonymous]
-    public async Task<ActionResult<IEnumerable<CategoryDTO>>> GetAsync([FromQuery]CategoriesParameters parameters)
+    public async Task<ActionResult<IEnumerable<CategoryDTO>>> GetAsync([FromQuery] CategoriesParameters parameters)
     {
         var categories = await _uof.CategoryRepository.GetCategoriesAsync(parameters);
 
@@ -76,6 +85,10 @@ public class CategoriesController : ControllerBase
         return ObtainCategory(categories);
     }
 
+    /// <summary>
+    /// Gets list of category objects from database that meet the filter options
+    /// </summary>
+    /// <returns>Returns list of categories</returns>
     [HttpGet]
     [Route("pagination/filter")]
     [AllowAnonymous]
@@ -108,9 +121,14 @@ public class CategoriesController : ControllerBase
 
         return Ok(categories.ToDTOList());
     }
-
+    
+    /// <summary>
+    /// Adds an object of the category type to the database
+    /// </summary>
+    /// <param name="categoryDto"></param>
+    /// <returns>Returns the category object added to database</returns>
     [HttpPost]
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<CategoryDTO>> Post(CategoryDTO categoryDto)
     {
         if (categoryDto == null)
@@ -125,6 +143,12 @@ public class CategoriesController : ControllerBase
         return new CreatedAtRouteResult(new { id = categoryDto.CategoryId }, categoryDto);
     }
 
+    /// <summary>
+    /// Edits an existing category in the database
+    /// </summary>
+    /// <param name="id"></param>
+    /// <param name="categoryDto"></param>
+    /// <returns>Returns the object edited</returns>
     [HttpPut]
     [Route("{id:int:min(1)}")]
     [Authorize(Policy = "AdminOnly")]
@@ -142,9 +166,14 @@ public class CategoriesController : ControllerBase
         return Ok(categoryDto);
     }
 
+    /// <summary>
+    /// Deletes a category object from the database
+    /// </summary>
+    /// <param name="id"></param>
+    /// <returns>Returns the deleted object</returns>
     [HttpDelete]
     [Route("{id:int:min(1)}")]
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<CategoryDTO>> DeleteAsync(int id)
     {
         var category = await _uof.CategoryRepository.GetByIdAsync(x => x.CategoryId == id);
