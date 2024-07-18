@@ -128,7 +128,7 @@ public class CategoriesController : ControllerBase
     /// <param name="categoryDto"></param>
     /// <returns>Returns the category object added to database</returns>
     [HttpPost]
-    [Authorize(Policy = "AdminOnly")]
+    //[Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<CategoryDTO>> Post(CategoryDTO categoryDto)
     {
         if (categoryDto == null)
@@ -151,7 +151,7 @@ public class CategoriesController : ControllerBase
     /// <returns>Returns the object edited</returns>
     [HttpPut]
     [Route("{id:int:min(1)}")]
-    [Authorize(Policy = "AdminOnly")]
+    //[Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<CategoryDTO>> PutAsync(int id, CategoryDTO categoryDto)
     {
         if (categoryDto.CategoryId != id)
@@ -173,7 +173,7 @@ public class CategoriesController : ControllerBase
     /// <returns>Returns the deleted object</returns>
     [HttpDelete]
     [Route("{id:int:min(1)}")]
-    [Authorize(Policy = "AdminOnly")]
+    //[Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<CategoryDTO>> DeleteAsync(int id)
     {
         var category = await _uof.CategoryRepository.GetByIdAsync(x => x.CategoryId == id);
@@ -183,7 +183,7 @@ public class CategoriesController : ControllerBase
             _logger.LogWarning($"Could not find category. Id: {id}");
             return NotFound($"Could not find category. Id: {id}");
         }
-
+        
         _uof.CategoryRepository.Delete(category);
         await _uof.CommitAsync();
 

@@ -20,9 +20,9 @@ using Microsoft.OpenApi.Models;
 
 namespace CatalogApi;
 
- internal static class Program
+internal static class Program
 {
-     internal static void Main(string[] args)
+    internal static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -35,7 +35,11 @@ namespace CatalogApi;
         builder.Services.AddCors(options =>
         {
             options.AddPolicy("CorsPolicyOne",
-                policy => { policy.WithOrigins("https://localhost:7185").WithMethods("GET").AllowAnyHeader(); });
+                policy =>
+                {
+                    policy.WithOrigins("https://localhost:44386/").WithMethods("GET", "POST", "PUT", "DELETE")
+                        .AllowAnyHeader();
+                });
         });
 
         builder.Services.AddEndpointsApiExplorer();
